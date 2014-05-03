@@ -9,6 +9,43 @@
   void draw() {
   }
 }*/
+PShape world;
+void createWorld() {
+  world = createShape();
+  world.beginShape(POLYGON);
+  world.stroke(255, 0, 255);
+  world.fill(0,0,255);  
+  world.beginContour();
+  world.vertex(-100, width/3*2, -100);
+  world.vertex(1000, width/3*2, -100);
+  world.vertex(1000, width/3*2, 1000);
+  world.vertex(-100, width/3*2, 1000);
+  world.endContour();
+  world.endShape(CLOSE);
+}
+void drawWorld() {
+  shape(world);
+}
+
+PVector getTrianglePressureForce(PVector r1, PVector r2, PVector r3, PVector V1, PVector V2, PVector V3) {
+  PVector a = PVector.sub(r1, r2);
+  PVector b = PVector.sub(r1, r3);
+  PVector NORM = a.cross(b);
+  NORM.normalize();
+  
+ //   if(random(100) < 1) { println(r1); println(r2); println(r3); println((a.magSq()*b.magSq())); }
+ if(a.magSq()*b.magSq() == 0) return new PVector(0,0,0);
+ else return PVector.mult(
+                                         (PVector.add(
+                                                       NORM,
+                                                       PVector.div(
+                                                                   PVector.add(
+                                                                               PVector.add(V1,V2),
+                                                                               V3),
+                                                                   3))),
+                                          PVector.dot(a,b)*0.5 * sqrt(1 - PVector.dot(a,b)*PVector.dot(a,b)/(a.magSq()*b.magSq())));
+}
+
 ArrayList<Blade> blades = new ArrayList<Blade>();
   
 void updateAllBlades() {
@@ -19,6 +56,7 @@ void updateAllBlades() {
       blade.draw();
     }
 }
+
 
 class Blade {
   Blade() {
@@ -100,28 +138,64 @@ class Blade {
       length[4][i][1] = 0;
     }
     
-    taga = (father.taga + mother.taga)/2*(0.9+random(0.2))+random(0.2)-random(0.2);
+    //taga = (father.taga + mother.taga)/2*(0.9+random(0.2))+random(0.2)-random(0.2);
   }
   
   float[][][] length = new float[5][32][2];
   PShape bladeShape;
   color surfaceColor;
   void update() {
-    velY -= taga;
-    velY += 0.2;
-    posY += velY;
-    velY *= 0.998;
-    if(posY > width/3*2) {
-      posY = width/3*2;
-      velY = -velY*0.85;
+    PVector F = new PVector(0,0,0);
+    PVector V1 = new PVector(0,0,0), V2 = new PVector(0,0,0), V3 = new PVector(0,0,0), V4 = new PVector(0,0,0);
+    PVector r1, r2, r3, r4;
+    for(int node = 0; node < 4; ++node) {      
+      for(int N = 0; N < 32; ++N) {
+          r1 = new PVector(length[node+1][N][0], length[node+1][N][1], distance[node+1]); 
+          r2 = new PVector(length[node][N][0], length[node][N][1], distance[node]);       
+          r3 = new PVector(length[node][(N+1)%32][0], length[node][(N+1)%32][1], distance[node]);
+          r4 = new PVector(length[node+1][(N+1)%32][0], length[node+1][(N+1)%32][1], distance[node+1]);
+          
+          float rotVel = rotAngle()/frameCount;
+          float range1 = new PVector(r1.x, r1.y, 0).mag();
+          float range2 = new PVector(r2.x, r2.y, 0).mag();
+          float range3 = new PVector(r3.x, r3.y, 0).mag();
+          float range4 = new PVector(r4.x, r4.y, 0).mag();
+          PVector velDirection1 = new PVector(-r1.y, r1.x, 0);
+          PVector velDirection2 = new PVector(-r2.y, r2.x, 0);
+          PVector velDirection3 = new PVector(-r3.y, r3.x, 0);
+          PVector velDirection4 = new PVector(-r4.y, r4.x, 0);
+          velDirection1.normalize();
+          velDirection2.normalize();
+          velDirection3.normalize();
+          velDirection4.normalize();
+          
+          V1 = velDirection1;
+          V2 = velDirection2;
+          V3 = velDirection3;
+          V4 = velDirection4;
+          V1.mult(rotVel * range1);
+          V2.mult(rotVel * range2);
+          V3.mult(rotVel * range3);
+          V4.mult(rotVel * range4);
+          
+          F.add(getTrianglePressureForce(r1,r2,r3,V1,V2,V3));
+          F.add(getTrianglePressureForce(r1,r3,r4,V1,V3,V4));      
+        }
+      }
+    F.y += 0.2;
+    //vel.add(F);
+    pos.add(vel);
+    vel.mult(0.998);
+    if(pos.y > width/3*2) {
+      pos.y = width/3*2;
+      vel.y = -vel.y*0.85;
     }
   }
   void draw() {
     pushMatrix();
-    rotateX(mouseY * 0.01f);
-    translate(posX, posY);
+    translate(pos.x, pos.y);
     rotateX(60 * 0.01f);
-    rotateY(frameCount * 0.01f + frameCount*frameCount * 0.0001f - velY*10);
+    rotateY(rotAngle());
     
     final int bladeCount = 3;
     for(int N = 0; N < bladeCount; ++N) {
@@ -130,10 +204,10 @@ class Blade {
     }
     popMatrix();
   }
-  float posX = width/2, posY = 100;
-  float velY = random(1)-random(1);
-  
-  float taga = 0;
+  PVector pos = new PVector(width/2, 100, 0);
+  PVector vel = PVector.random3D();
+  /* In radians */
+  float rotAngle() { return frameCount * 0.01f * (frameCount * 0.01f) * mouseX/500; }
 }
 
 Blade father, mother, subling;
@@ -143,14 +217,19 @@ void setup() {
   mother = new Blade();
   subling = new Blade(father, mother);
   
-  father.posX -= width/4;
-  mother.posX += width/4;
+  father.pos.x -= width/4;
+  mother.pos.x += width/4;
+  
+  createWorld();
 }
 
 void draw() {
   background(127);
 
 
+  
+  rotateX(mouseY * 0.01f);
+  drawWorld();
   updateAllBlades();
   /*father.update();
   father.draw();
@@ -165,16 +244,14 @@ void draw() {
 void replaceSlowest() {
   int min_velY_index = 0;
   for(int i = 0; i < blades.size(); ++i) {
-    if((blades.get(i).velY) > (blades.get(min_velY_index).velY)) {
+    if((blades.get(i).vel.y) > (blades.get(min_velY_index).vel.y)) {
       min_velY_index = i;
     }
   }
-  float posX = blades.get(min_velY_index).posX;
-  float posY = blades.get(min_velY_index).posY;
+  PVector pos = blades.get(min_velY_index).pos;
   blades.remove(min_velY_index);
   Blade blade = new Blade(blades.get((min_velY_index+1)%blades.size()),blades.get((min_velY_index+2)%blades.size()));
-  blade.posX = posX;
-  blade.posY = posY;
+  blade.pos = pos;
 }
 
 void mouseClicked() {
