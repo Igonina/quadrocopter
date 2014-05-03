@@ -9,6 +9,9 @@
   void draw() {
   }
 }*/
+
+PShader phongShader;
+
 PShape world;
 void createWorld() {
   world = createShape();
@@ -47,11 +50,14 @@ PVector getTrianglePressureForce(PVector r1, PVector r2, PVector r3, PVector V1,
 }
 
 ArrayList<Blade> blades = new ArrayList<Blade>();
-  
+
+final int physicsIterationCount = 20;
 void updateAllBlades() {
+  for(int iteration = 0; iteration < physicsIterationCount; ++iteration) {
     for(Blade blade : blades) {
       blade.update();
     }
+  }
     for(Blade blade : blades) {
       blade.draw();
     }
@@ -79,7 +85,8 @@ class Blade {
       for(int N = 0; N < 32; ++N) {
         PShape face = createShape();
         face.beginShape(POLYGON);
-        face.stroke(0, 255, 0);
+        //face.stroke(0, 255, 0);
+        face.noStroke();
         face.fill(surfaceColor);  
         face.beginContour();
         face.vertex(length[node+1][N][0], length[node+1][N][1], distance[node+1]);
@@ -182,10 +189,10 @@ class Blade {
           F.add(getTrianglePressureForce(r1,r3,r4,V1,V3,V4));      
         }
       }
-    F.y += 0.2;
+    F.y += 0.2/physicsIterationCount;
     //vel.add(F);
-    pos.add(vel);
-    vel.mult(0.998);
+    pos.add(PVector.mult(vel,1.0/physicsIterationCount));
+    vel.mult(pow(0.998, 1.0/physicsIterationCount));
     if(pos.y > width/3*2) {
       pos.y = width/3*2;
       vel.y = -vel.y*0.85;
@@ -207,12 +214,18 @@ class Blade {
   PVector pos = new PVector(width/2, 100, 0);
   PVector vel = PVector.random3D();
   /* In radians */
-  float rotAngle() { return frameCount * 0.01f * (frameCount * 0.01f) * mouseX/500; }
+  float rotAngle() { return frameCount * 0.2f; }
 }
 
 Blade father, mother, subling;
+
+PImage background;
+
 void setup() {
   size(1024, 1024, P3D);
+  
+  smooth();
+  
   father = new Blade();
   mother = new Blade();
   subling = new Blade(father, mother);
@@ -221,13 +234,31 @@ void setup() {
   mother.pos.x += width/4;
   
   createWorld();
+  
+  background = loadImage("background.jpg");
+  
+  phongShader = loadShader("phongFrag.glsl", "phongVert.glsl");
+  smooth();
+  frameRate(120);
 }
 
 void draw() {
-  background(127);
-
-
   
+    
+  resetShader();
+  //background(color(240, 127, 20), 0);
+  tint(255, 145);  // Tint set transparency
+  pushMatrix();
+  translate(-400,-400,-550);
+  image(background, 0, 0);
+  popMatrix();
+  
+  shader(phongShader);
+  
+  float dirY = 1;//(mouseY / float(height) - 0.5) * 2;
+  float dirX = 1;//(mouseX / float(width) - 0.5) * 2;
+  directionalLight(204, 204, 204, -dirX, -dirY, -1);
+
   rotateX(mouseY * 0.01f);
   drawWorld();
   updateAllBlades();
