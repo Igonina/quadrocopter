@@ -58,9 +58,12 @@ void updateAllBlades() {
       blade.update();
     }
   }
+}
+void drawAllBlades() {
     for(Blade blade : blades) {
       blade.draw();
     }
+    println("Blade velocity: " + blades.get(0).vel.y);
 }
 
 
@@ -76,6 +79,9 @@ class Blade {
     makeShape();
     
     blades.add(this);
+  }
+  void kill() {
+    blades.remove(this);
   }
   void makeShape() {
     bladeShape = createShape(GROUP);
@@ -152,6 +158,7 @@ class Blade {
   PShape bladeShape;
   color surfaceColor;
   void update() {
+    rotAngle += rotAngleVel();
     PVector F = new PVector(0,0,0);
     PVector V1 = new PVector(0,0,0), V2 = new PVector(0,0,0), V3 = new PVector(0,0,0), V4 = new PVector(0,0,0);
     PVector r1, r2, r3, r4;
@@ -162,7 +169,7 @@ class Blade {
           r3 = new PVector(length[node][(N+1)%32][0], length[node][(N+1)%32][1], distance[node]);
           r4 = new PVector(length[node+1][(N+1)%32][0], length[node+1][(N+1)%32][1], distance[node+1]);
           
-          float rotVel = rotAngle()/frameCount;
+          float rotVel = rotAngleVel();
           float range1 = new PVector(r1.x, r1.y, 0).mag();
           float range2 = new PVector(r2.x, r2.y, 0).mag();
           float range3 = new PVector(r3.x, r3.y, 0).mag();
@@ -202,7 +209,7 @@ class Blade {
     pushMatrix();
     translate(pos.x, pos.y);
     rotateX(60 * 0.01f);
-    rotateY(rotAngle());
+    rotateY(rotAngle);
     
     final int bladeCount = 3;
     for(int N = 0; N < bladeCount; ++N) {
@@ -211,13 +218,14 @@ class Blade {
     }
     popMatrix();
   }
-  PVector pos = new PVector(width/2, 100, 0);
+  PVector pos = new PVector(width/2 + random(300) - random(300), 100 + random(300) - random(300), 0 + random(300) - random(300));
   PVector vel = PVector.random3D();
+  float rotAngle = 0;
   /* In radians */
-  float rotAngle() { return frameCount * 0.2f; }
+  float rotAngleVel() { return 0.2f/physicsIterationCount; }
 }
 
-Blade father, mother, subling;
+//Blade father, mother, subling;
 
 PImage background;
 
@@ -226,12 +234,12 @@ void setup() {
   
   smooth();
   
-  father = new Blade();
-  mother = new Blade();
-  subling = new Blade(father, mother);
+  //father = new Blade();
+  //mother = new Blade();
+  //subling = new Blade(father, mother);
   
-  father.pos.x -= width/4;
-  mother.pos.x += width/4;
+  //father.pos.x -= width/4;
+  //mother.pos.x += width/4;
   
   createWorld();
   
@@ -240,6 +248,8 @@ void setup() {
   phongShader = loadShader("phongFrag.glsl", "phongVert.glsl");
   smooth();
   frameRate(120);
+  
+  simulate();
 }
 
 void draw() {
@@ -262,6 +272,7 @@ void draw() {
   rotateX(mouseY * 0.01f);
   drawWorld();
   updateAllBlades();
+  drawAllBlades();
   /*father.update();
   father.draw();
   
@@ -272,7 +283,7 @@ void draw() {
   subling.draw();*/
 }
 
-void replaceSlowest() {
+/*void replaceSlowest() {
   int min_velY_index = 0;
   for(int i = 0; i < blades.size(); ++i) {
     if((blades.get(i).vel.y) > (blades.get(min_velY_index).vel.y)) {
@@ -287,4 +298,71 @@ void replaceSlowest() {
 
 void mouseClicked() {
   replaceSlowest();
+}*/
+
+final int speciesCount = 5;
+final int individualCount = 10;
+
+void simulate() {
+  Blade[][] species = new Blade[speciesCount][individualCount];
+  for(int i = 0; i < speciesCount; ++i) {
+    for(int j = 0; j < individualCount; ++j) {
+      species[i][j] = new Blade();
+    }
+  }
+  for(int i = 0; i < 10; ++i) {
+    updateAllBlades();
+  }
+  
+  /*float averageVelocity = 0;
+  for(int i = 0; i < speciesCount; ++i) {
+    for(int j = 0; j < individualCount; ++j) {
+      averageVelocity += species[i][j].vel.y;
+    }
+  }
+  averageVelocity /= speciesCount*individualCount;
+  
+  for(int i = 0; i < speciesCount; ++i) {
+    for(int j = 0; j < individualCount; ++j) {
+      if(species[i][j].vel.y > averageVelocity/2) {
+        species[i][j].kill();
+      }
+    }
+  }*/
+  for(int iter = 0; iter < 10; ++iter) {
+    float prevVel = species[0][0].vel.y;
+    for(int i = 0; i < speciesCount; ++i) {
+      for(int j = 0; j < individualCount; ++j) {
+        if(species[i][j].vel.y > prevVel) {
+          species[i][j].kill();
+          if(i != 0 && j != 0) {
+            species[i][j] = new Blade(species[i-1][j],species[i][j-1]);
+          }
+        } else {
+          prevVel = species[i][j].vel.y;
+        }
+        species[i][j].vel.y = -10;
+      }
+    }
+    for(int i = 0; i < 10; ++i) {
+      updateAllBlades();
+    }
+  }
+  
+  
+  // Dispose all but 1 fastest
+  float maxVel = species[0][0].vel.y;
+  int maxVelIndexI = 0, maxVelIndexJ = 0;
+  for(int i = 0; i < speciesCount; ++i) {
+    for(int j = 0; j < individualCount; ++j) {
+      if(species[i][j].vel.y > maxVel && maxVelIndexI != i && maxVelIndexJ != j) {
+          species[i][j].kill();
+      } else {
+        maxVel = species[i][j].vel.y;
+        species[maxVelIndexI][maxVelIndexJ].kill();
+        maxVelIndexI = i;
+        maxVelIndexJ = j;
+      }
+    }
+  }
 }
